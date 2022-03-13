@@ -14,9 +14,9 @@ import (
 
 type cuvinte map[string]byte
 
-// dict[aa] de ex si returneaza dictul cu cuvintele care incep cu aa
-//var dictionar map[string]cuvinte
 var dictionar = make(map[string]cuvinte)
+
+var StartingLetters string
 
 var random = rand.New(rand.NewSource(time.Now().UnixNano()))
 
@@ -29,13 +29,16 @@ func init() {
 		log.Fatal(err)
 	}
 
+	var builder strings.Builder
 	for _, file := range files {
 		if file.IsDir() {
 			continue
 		}
-
+		builder.WriteString(file.Name())
+		builder.WriteRune(' ')
 		dictionar[file.Name()] = makeCuvinteDict("./data/" + file.Name())
 	}
+	StartingLetters = builder.String()
 }
 
 func makeCuvinteDict(fileName string) cuvinte {
@@ -64,14 +67,27 @@ func makeCuvinteDict(fileName string) cuvinte {
 func main() {
 	http.HandleFunc("/GetWordStartingWith", ServeWord)
 	http.HandleFunc("/IsValidWord", IsValidWord)
+	http.HandleFunc("/GetStarting", ListStartingCombinations)
 
 	fmt.Println("Server started!")
 	http.ListenAndServe(":1337", nil)
 }
 
 func ServeWord(w http.ResponseWriter, r *http.Request) {
-	Cuvinte := dictionar[r.URL.Query()["starting"][0]]
+	cuvant := r.URL.Query()["start"][0]
 
+	length := len(cuvant)
+
+	if length < 2 {
+		return
+	}
+	var sb strings.Builder
+
+	sb.WriteByte(cuvant[0])
+	sb.WriteByte(cuvant[1])
+	fmt.Println(sb.String())
+
+	Cuvinte := dictionar[sb.String()]
 	randomIndex := random.Intn(len(Cuvinte))
 
 	word := "N/A"
@@ -88,18 +104,39 @@ func ServeWord(w http.ResponseWriter, r *http.Request) {
 }
 
 func IsValidWord(w http.ResponseWriter, r *http.Request) {
-	cuvant := r.URL.Query()["word"][0]
-	//cuvant := dictionar[r.URL.Query()["word"][0]]
+	cuvinte := r.URL.Query()["word"]
+	if len(cuvinte) < 2 {
+		return
+	}
 
 	var sb strings.Builder
-	sb.WriteByte(cuvant[0])
-	sb.WriteByte(cuvant[1])
 
+	length := len(cuvinte[1])
+	if length < 2 {
+		return
+	}
+
+	sb.WriteByte(cuvinte[1][length-2])
+	sb.WriteByte(cuvinte[1][length-1])
+
+	if !strings.HasPrefix(cuvinte[0], sb.String()) {
+		fmt.Fprintf(w, "false")
+		return
+	}
+
+	sb.Reset()
+	sb.WriteByte(cuvinte[0][0])
+	sb.WriteByte(cuvinte[0][1])
+	fmt.Println(sb.String())
 	for k, _ := range dictionar[sb.String()] {
-		if k == cuvant {
+		if k == cuvinte[0] {
 			fmt.Fprintf(w, "true")
 			return
 		}
 	}
 	fmt.Fprintf(w, "false")
+}
+
+func ListStartingCombinations(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, StartingLetters)
 }
