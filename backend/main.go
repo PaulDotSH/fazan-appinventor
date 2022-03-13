@@ -75,30 +75,41 @@ func main() {
 
 func ServeWord(w http.ResponseWriter, r *http.Request) {
 	cuvant := r.URL.Query()["start"][0]
-
+	fmt.Println(r.URL.Query()["start"])
 	length := len(cuvant)
 
 	if length < 2 {
 		return
 	}
+
 	var sb strings.Builder
 
-	sb.WriteByte(cuvant[0])
-	sb.WriteByte(cuvant[1])
-	fmt.Println(sb.String())
+	if length == 2 {
+		sb.WriteByte(cuvant[0])
+		sb.WriteByte(cuvant[1])
+	} else {
+		sb.WriteByte(cuvant[length-2])
+		sb.WriteByte(cuvant[length-1])
+	}
 
 	Cuvinte := dictionar[sb.String()]
+	if len(Cuvinte) == 0 {
+		fmt.Fprintf(w, "N/A")
+		fmt.Println("N/A")
+		return
+	}
 	randomIndex := random.Intn(len(Cuvinte))
 
 	word := "N/A"
 	i := 0
 	for k, _ := range Cuvinte {
-		i += 1
 		if i == randomIndex {
 			word = k
 			break
 		}
+		i += 1
 	}
+	fmt.Println(word)
 
 	fmt.Fprintf(w, word)
 }
@@ -127,13 +138,15 @@ func IsValidWord(w http.ResponseWriter, r *http.Request) {
 	sb.Reset()
 	sb.WriteByte(cuvinte[0][0])
 	sb.WriteByte(cuvinte[0][1])
-	fmt.Println(sb.String())
-	for k, _ := range dictionar[sb.String()] {
-		if k == cuvinte[0] {
-			fmt.Fprintf(w, "true")
-			return
-		}
+
+	tmp := dictionar[sb.String()]
+
+	b := tmp[cuvinte[0]]
+	if b == 1 {
+		fmt.Fprintf(w, "true")
+		return
 	}
+
 	fmt.Fprintf(w, "false")
 }
 
