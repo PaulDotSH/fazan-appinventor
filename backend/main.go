@@ -1,13 +1,17 @@
 package main
 
 import (
+	"archive/tar"
 	"bufio"
+	"bytes"
+	"compress/gzip"
+	_ "embed"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"math/rand"
 	"net/http"
-	"os"
+	"sort"
 	"strings"
 	"time"
 )
@@ -20,37 +24,72 @@ var StartingLetters string
 
 var random = rand.New(rand.NewSource(time.Now().UnixNano()))
 
-//generate the dict here
+// The word lists live compressed in data.tar.gz (one file per starting
+// bigram). Embedding the archive keeps the repository small; it is
+// decompressed in memory at startup instead of shipping an uncompressed
+// data/ directory.
+//
+//go:embed data.tar.gz
+var dataArchive []byte
+
+// generate the dict here
 func init() {
 	fmt.Println("Starting server...")
 
-	files, err := ioutil.ReadDir("./data/")
+	contents, err := readDataArchive(dataArchive)
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	names := make([]string, 0, len(contents))
+	for name := range contents {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
 	var builder strings.Builder
-	for _, file := range files {
-		if file.IsDir() {
-			continue
-		}
-		builder.WriteString(file.Name())
+	for _, name := range names {
+		builder.WriteString(name)
 		builder.WriteRune(' ')
-		dictionar[file.Name()] = makeCuvinteDict("./data/" + file.Name())
+		dictionar[name] = makeCuvinteDict(bytes.NewReader(contents[name]))
 	}
 	StartingLetters = builder.String()
 }
 
-func makeCuvinteDict(fileName string) cuvinte {
+func readDataArchive(raw []byte) (map[string][]byte, error) {
+	gz, err := gzip.NewReader(bytes.NewReader(raw))
+	if err != nil {
+		return nil, err
+	}
+	defer gz.Close()
+
+	files := make(map[string][]byte)
+	tr := tar.NewReader(gz)
+	for {
+		header, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		if !header.FileInfo().Mode().IsRegular() {
+			continue
+		}
+		data, err := io.ReadAll(tr)
+		if err != nil {
+			return nil, err
+		}
+		files[header.Name] = data
+	}
+
+	return files, nil
+}
+
+func makeCuvinteDict(r io.Reader) cuvinte {
 	dict := make(cuvinte)
 
-	file, err := os.Open(fileName)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
+	scanner := bufio.NewScanner(r)
 
 	for scanner.Scan() {
 		//for line in file dict[line]=1
